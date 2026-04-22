@@ -2,3 +2,5 @@ python-telegram-bot
 ccxt
 flask
 requests
+google-generativeai
+httpx
