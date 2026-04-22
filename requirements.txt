@@ -1,6 +1,7 @@
-python-telegram-bot[job-queue]
+python-telegram-bot
 ccxt
 flask
 requests
 google-generativeai
 httpx
+apscheduler==3.10.4
