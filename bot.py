@@ -8,159 +8,135 @@ from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, Messa
 from threading import Thread
 
 # --- CONFIGURACIÓN DE IA (GEMINI) ---
-# Recuerda que en tu panel debe llamarse exactamente: GEMINI_API_KEY
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 model = genai.GenerativeModel('gemini-1.5-flash')
 chat_sessions = {}
 
-# --- MEMORIA LOCAL Y CONFIGURACIÓN ---
+# --- MEMORIA Y PREFERENCIAS ---
 user_prefs = {
-    "min_liquidity": 20000,
-    "style": "Analítico, empático y creativo",
-    "last_instruction": "Ninguna"
+    "min_liquidity": 25000,
+    "style": "Analítico y profesional",
+    "last_note": "Ninguna"
 }
 
 app = Flask(__name__)
 @app.route('/')
-def home(): return "Mente Maestra MC Losibe Online 🧠🚀"
+def home(): return "Mente Maestra MC Losibe: Online 🧠"
 
-# --- UTILIDADES DE MERCADO ---
-async def fetch_global_market():
-    """Obtiene el top de criptos globales desde CoinGecko"""
-    url = "https://api.coingecko.com/api/v3/coins/markets"
-    params = {
-        "vs_currency": "usd",
-        "ids": "bitcoin,ethereum,solana,binancecoin,ripple,cardano",
-        "order": "market_cap_desc"
-    }
-    async with httpx.AsyncClient() as client:
-        r = await client.get(url, params=params, timeout=10)
-        return r.json()
+# --- BLOQUE 1: ANALISTA TÉCNICO IA (LA MEJORA) ---
+async def analizar_grafico_ia(pair_data):
+    """Procesa los datos de acción de precio y da un veredicto"""
+    nombre = pair_data.get('baseToken', {}).get('name', 'Token')
+    
+    # Datos de cambio de precio en distintas temporalidades
+    m5 = pair_data.get('priceChange', {}).get('m5', 0)
+    h1 = pair_data.get('priceChange', {}).get('h1', 0)
+    h6 = pair_data.get('priceChange', {}).get('h6', 0)
+    h24 = pair_data.get('priceChange', {}).get('h24', 0)
+    
+    liq = float(pair_data.get('liquidity', {}).get('usd', 0))
+    vol = float(pair_data.get('volume', {}).get('h24', 0))
+    
+    prompt = (
+        f"Analiza la estructura técnica de {nombre} en Solana.\n"
+        f"Variación: 5m: {m5}% | 1h: {h1}% | 6h: {h6}% | 24h: {h24}%\n"
+        f"Liquidez: ${liq:,.0f} | Volumen: ${vol:,.0f}\n\n"
+        "Como trader experto, dime: ¿Es una tendencia sana, un pump artificial o está en zona de acumulación? "
+        "Sé muy breve (máximo 3 líneas)."
+    )
 
-async def fetch_solana_trends():
-    """Busca tokens tendencia en Solana vía DexScreener"""
-    url = "https://api.dexscreener.com/latest/dex/search?q=solana"
-    async with httpx.AsyncClient() as client:
-        r = await client.get(url, timeout=10)
-        return r.json().get('pairs', [])
+    try:
+        response = model.generate_content(prompt)
+        return response.text
+    except:
+        return "⚠️ Análisis técnico no disponible en este momento."
 
-# --- COMANDO: MERCADO GLOBAL ---
+# --- BLOQUE 2: COMANDOS DE RADAR ---
 async def mercado_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = await update.message.reply_text("🌐 Consultando el pulso del mercado global...")
+    msg = await update.message.reply_text("🌐 Escaneando el ecosistema global...")
     try:
-        data = await fetch_global_market()
-        reporte = "🌍 **ESTADO DEL MERCADO CRYPTO**\n"
-        reporte += "----------------------------------\n"
+        url = "https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=bitcoin,ethereum,solana&order=market_cap_desc"
+        async with httpx.AsyncClient() as client:
+            r = await client.get(url)
+            data = r.json()
         
-        for coin in data:
-            change = coin['price_change_percentage_24h']
-            emoji = "📈" if change > 0 else "📉"
-            reporte += f"{emoji} **{coin['name']}**: `${coin['current_price']:,.2f}` ({change:.2f}%)\n"
-        
-        reporte += "\n💡 _El mercado es una frecuencia, aprende a sintonizarla._"
-        await msg.edit_text(reporte, parse_mode=constants.ParseMode.MARKDOWN)
-    except Exception as e:
-        await msg.edit_text(f"❌ Error al conectar con el mercado global: {e}")
+        rep = "🌍 **PULSO GLOBAL CRYPTO**\n"
+        for c in data:
+            rep += f"• **{c['name']}**: `${c['current_price']:,.2f}` ({c['price_change_percentage_24h']:.1f}%)\n"
+        await msg.edit_text(rep, parse_mode=constants.ParseMode.MARKDOWN)
+    except:
+        await msg.edit_text("❌ Error al conectar con CoinGecko.")
 
-# --- COMANDO: SNIPER SOLANA ---
 async def sniper_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = await update.message.reply_text("🎯 Ejecutando Radar de Solana (Filtros Activos)...")
+    msg = await update.message.reply_text("🎯 Iniciando Sniper con Análisis IA...")
     try:
-        pairs = await fetch_solana_trends()
-        min_liq = user_prefs["min_liquidity"]
-        
-        # Filtrado inteligente
-        filtered = [
-            p for p in pairs 
-            if float(p.get('liquidity', {}).get('usd', 0)) > min_liq 
-            and p.get('baseToken', {}).get('symbol') != 'SOL'
-        ][:5]
+        url = "https://api.dexscreener.com/latest/dex/search?q=solana"
+        async with httpx.AsyncClient() as client:
+            r = await client.get(url)
+            pairs = r.json().get('pairs', [])
 
-        if not filtered:
-            await msg.edit_text(f"⚠️ No hay oportunidades que superen los ${min_liq:,.0f} de liquidez ahora.")
+        # Filtro de liquidez según tu entrenamiento
+        min_liq = user_prefs["min_liquidity"]
+        top_pairs = [p for p in pairs if float(p.get('liquidity', {}).get('usd', 0)) > min_liq][:3]
+
+        if not top_pairs:
+            await msg.edit_text(f"⚠️ No hay tokens con liquidez > ${min_liq:,.0f}.")
             return
 
-        reporte = f"🚀 **SOLANA SNIPER RADAR**\n"
+        reporte = f"🚀 **RADAR SOLANA (Analista IA)**\n"
         reporte += f"⚙️ Filtro: `>${min_liq:,.0f} Liq`\n\n"
 
-        for p in filtered:
-            name = p['baseToken']['name']
-            liq = float(p['liquidity']['usd'])
-            vol = float(p['volume']['h24'])
-            # Ratio de salud: Volumen no debería ser 100 veces la liquidez (posible scam)
-            ratio = vol / liq if liq > 0 else 0
-            alerta = "⚠️" if ratio > 10 else "✅"
-
-            reporte += f"🔹 **{name}** {alerta}\n"
-            reporte += f"💧 Liq: `${liq:,.0f}` | 📊 Vol: `${vol:,.0f}`\n"
-            reporte += f"🔗 [Gráfico en DexScreener]({p['url']})\n\n"
+        for p in top_pairs:
+            nombre = p['baseToken']['name']
+            simbolo = p['baseToken']['symbol']
+            
+            # Llamamos a la IA para analizar el gráfico
+            veredicto = await analizar_grafico_ia(p)
+            
+            reporte += f"🔹 **{nombre} ({simbolo})**\n"
+            reporte += f"🧠 **IA:** _{veredicto}_\n"
+            reporte += f"🔗 [Gráfico]({p['url']})\n\n"
 
         await msg.edit_text(reporte, parse_mode=constants.ParseMode.MARKDOWN, disable_web_page_preview=True)
     except Exception as e:
-        await msg.edit_text(f"❌ Error en el radar: {e}")
+        await msg.edit_text(f"❌ Error en radar: {str(e)}")
 
-# --- COMANDO: APRENDER ---
+# --- BLOQUE 3: APRENDIZAJE Y CHAT ---
 async def aprender_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     texto = " ".join(context.args)
-    if not texto:
-        await update.message.reply_text("💡 Dime qué quieres que ajuste. Ej: `/aprender solo busca liquidez mayor a 50k`.")
-        return
-    
-    if "liquidez" in texto.lower():
-        nums = [int(s) for s in texto.split() if s.isdigit()]
-        if nums: user_prefs["min_liquidity"] = nums[0]
-    
-    user_prefs["last_instruction"] = texto
-    await update.message.reply_text(f"🧠 Ajuste guardado: '{texto}'. He calibrado mis sensores.")
+    if texto:
+        if "liquidez" in texto.lower():
+            nums = [int(s) for s in texto.split() if s.isdigit()]
+            if nums: user_prefs["min_liquidity"] = nums[0]
+        user_prefs["last_note"] = texto
+        await update.message.reply_text(f"✅ Memoria actualizada: {texto}")
 
-# --- CHAT FLUIDO CON GEMINI ---
 async def chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    user_text = update.message.text
-
     if user_id not in chat_sessions:
         chat_sessions[user_id] = model.start_chat(history=[])
-
-    # El "Cerebro" de MC Losibe
-    system_instruction = (
-        f"Eres el asistente inteligente de MC Losibe, quien es Psicólogo, Rapero y Driver en Chile. "
-        f"Tu tono es {user_prefs['style']}. "
-        f"Contexto actual de trading: {user_prefs['last_instruction']}. "
-        f"Si te pide rimas, usa el estilo 'música medicina'. Si te pide consejos de psicología, sé empático pero profesional. "
-        f"Mantén tus respuestas breves y directas para Telegram."
-    )
-
+    
+    instr = f"Eres el asistente de MC Losibe (Psicólogo y Rapero). Tu filtro: {user_prefs['min_liquidity']} USD. Nota: {user_prefs['last_note']}"
     try:
-        response = chat_sessions[user_id].send_message(f"{system_instruction}\n\nUsuario: {user_text}")
-        await update.message.reply_text(response.text, parse_mode=constants.ParseMode.MARKDOWN)
-    except Exception as e:
-        await update.message.reply_text("🤯 Estoy procesando demasiada información. Dame un respiro e inténtalo de nuevo.")
+        res = chat_sessions[user_id].send_message(f"{instr}\n\nPregunta: {update.message.text}")
+        await update.message.reply_text(res.text, parse_mode=constants.ParseMode.MARKDOWN)
+    except:
+        await update.message.reply_text("🤯 Estoy procesando mucha info. Intenta de nuevo.")
 
-# --- INICIO DE APLICACIÓN ---
-async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "👋 **¡Radar Adaptativo MC Losibe v3.0!**\n\n"
-        "He optimizado mis algoritmos para detectar scams y entender tu estilo de vida.\n\n"
-        "📌 **/mercado** - Pulso de las grandes (BTC, ETH, SOL).\n"
-        "🎯 **/sniper** - Escaneo de gemas en Solana con filtros de seguridad.\n"
-        "🧠 **/aprender** - Dame instrucciones de cómo quieres que trabaje.\n\n"
-        "Cualquier otra cosa, **solo escríbeme** y charlamos."
-    )
+# --- INICIO ---
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("✅ **Radar MC Losibe Online.**\n\n`/mercado` - Global\n`/sniper` - Solana IA\n`/aprender` - Ajustes")
 
 if __name__ == "__main__":
-    def run_flask():
-        app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
-    
-    Thread(target=run_flask, daemon=True).start()
+    def run_f(): app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
+    Thread(target=run_f, daemon=True).start()
 
     token = os.getenv("TELEGRAM_TOKEN")
     if token:
-        application = ApplicationBuilder().token(token).build()
-        application.add_handler(CommandHandler("start", start_handler))
-        application.add_handler(CommandHandler("mercado", mercado_handler))
-        application.add_handler(CommandHandler("sniper", sniper_handler))
-        application.add_handler(CommandHandler("aprender", aprender_handler))
-        application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), chat_handler))
-        
-        print("🤖 Bot Híbrido Optimizado desplegando...")
-        application.run_polling(drop_pending_updates=True)
+        app_tg = ApplicationBuilder().token(token).build()
+        app_tg.add_handler(CommandHandler("start", start))
+        app_tg.add_handler(CommandHandler("mercado", mercado_handler))
+        app_tg.add_handler(CommandHandler("sniper", sniper_handler))
+        app_tg.add_handler(CommandHandler("aprender", aprender_handler))
+        app_tg.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), chat_handler))
+        app_tg.run_polling()
