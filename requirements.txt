@@ -1,6 +1,5 @@
 python-telegram-bot
-apscheduler==3.10.4
-google-generativeai
+apscheduler
 httpx
+google-generativeai
 flask
-ccxt
