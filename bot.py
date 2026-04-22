@@ -1,50 +1,46 @@
 import os
-import asyncio
 from flask import Flask
 from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 import ccxt
 
-# Servidor para que Render mantenga el bot activo
+# 1. Configuración del Servidor Web (para mantener Render vivo)
 app = Flask(__name__)
 
 @app.route('/')
-def home(): 
-    return "Solana Sniper Activo 🚀"
+def home():
+    return "Solana Sniper Activo y Vigilando 🚀"
 
-async def start(update: Update, context):
+# 2. Lógica del Bot
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "💪 ¡Hola! Tu asistente de inversiones está en línea.\n\n"
-        "Analizando BTC, ETH y la red de Solana.\n"
-        "Recuerda: Operamos con el equilibrio de un profesional."
+        "👋 ¡Hola! Tu asistente profesional está en línea.\n\n"
+        "📊 **Mercado (22 Abr, 2026):** Miedo Extremo (9/100).\n"
+        "Recuerda: Acepto el cambio y opero con equilibrio."
     )
 
-async def run_bot():
+def run_bot():
     token = os.getenv("TELEGRAM_TOKEN")
     if not token:
         print("Error: No se encontró el TELEGRAM_TOKEN")
         return
+
+    # Creamos la aplicación (Forma moderna v20+)
+    application = ApplicationBuilder().token(token).build()
     
-    # Construcción del bot
-    app_bot = ApplicationBuilder().token(token).build()
-    app_bot.add_handler(CommandHandler("start", start))
+    # Añadimos el comando de inicio
+    application.add_handler(CommandHandler("start", start))
     
-    await app_bot.initialize()
-    await app_bot.start_polling()
-    print("Bot activo y rastreando...")
-    
-    # Bucle para mantener el proceso vivo
-    while True:
-        await asyncio.sleep(3600)
+    # Encendemos el bot de forma estable
+    print("🤖 Bot de Telegram iniciando...")
+    application.run_polling()
 
 if __name__ == "__main__":
     from threading import Thread
-    # Inicia el servidor web en un hilo aparte
-    port = int(os.environ.get("PORT", 5000))
+    
+    # Lanzar Flask en un hilo aparte
+    port = int(os.environ.get("PORT", 10000))
     Thread(target=lambda: app.run(host="0.0.0.0", port=port)).start()
     
-    # Inicia el bot de Telegram
-    try:
-        asyncio.run(run_bot())
-    except KeyboardInterrupt:
-        pass
+    # Lanzar el bot de Telegram directamente
+    run_bot()
