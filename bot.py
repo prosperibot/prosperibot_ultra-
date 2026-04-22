@@ -7,8 +7,10 @@ import ccxt
 
 # Servidor para que Render mantenga el bot activo
 app = Flask(__name__)
+
 @app.route('/')
-def home(): return "Solana Sniper Activo 🚀"
+def home(): 
+    return "Solana Sniper Activo 🚀"
 
 async def start(update: Update, context):
     await update.message.reply_text(
@@ -23,17 +25,26 @@ async def run_bot():
         print("Error: No se encontró el TELEGRAM_TOKEN")
         return
     
+    # Construcción del bot
     app_bot = ApplicationBuilder().token(token).build()
     app_bot.add_handler(CommandHandler("start", start))
     
     await app_bot.initialize()
     await app_bot.start_polling()
     print("Bot activo y rastreando...")
+    
+    # Bucle para mantener el proceso vivo
+    while True:
+        await asyncio.sleep(3600)
 
 if __name__ == "__main__":
     from threading import Thread
     # Inicia el servidor web en un hilo aparte
     port = int(os.environ.get("PORT", 5000))
     Thread(target=lambda: app.run(host="0.0.0.0", port=port)).start()
+    
     # Inicia el bot de Telegram
-    asyncio.run(run_bot())
+    try:
+        asyncio.run(run_bot())
+    except KeyboardInterrupt:
+        pass
