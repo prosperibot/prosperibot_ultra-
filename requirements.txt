@@ -1,7 +1,6 @@
 python-telegram-bot
-ccxt
-flask
-requests
+apscheduler==3.10.4
 google-generativeai
 httpx
-apscheduler==3.10.4
+flask
+ccxt
