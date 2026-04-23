@@ -7,78 +7,69 @@ from telegram import Update, constants
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters
 from threading import Thread
 
-# --- 1. CONFIGURACIÓN DE NÚCLEO ---
+# --- CONFIGURACIÓN ---
 logging.basicConfig(level=logging.INFO)
 app = Flask(__name__)
 
 @app.route('/')
-def health(): return "Cerebro MC Losibe: Evolucionando 🧠✨", 200
+def health(): return "Cerebro Racional MC Losibe: Operativo 🧠", 200
 
-# --- 2. GESTIÓN DE MEMORIA Y APRENDIZAJE ---
+# IA y Gestión de Sesiones
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 model = genai.GenerativeModel('gemini-1.5-flash')
 chat_sessions = {}
 
-# Memoria Persistente de Acuerdos (Se actualiza en vivo)
-acuerdos_maestros = {
-    "trading": "Priorizar seguridad sobre ganancias rápidas. Liquidez mínima $30k.",
-    "estilo": "Hablar como un socio par, con toques de psicología y terminología de rap.",
-    "objetivos": "Encontrar gemas orgánicas y potenciar la marca Fun G Prod."
-}
-
-def construir_instruccion_maestra():
+# --- EL MOTOR DE RACIONALIZACIÓN ---
+def prompt_racional(mensaje_usuario):
     return (
-        f"Eres el socio inteligente de MC Losibe (Psicólogo, Rapero y Driver).\n"
-        f"Tu meta no es solo responder, es APRENDER de él.\n"
-        f"ACUERDOS ACTUALES:\n"
-        f"- Trading: {acuerdos_maestros['trading']}\n"
-        f"- Identidad: {acuerdos_maestros['estilo']}\n"
-        f"- Proyectos: {acuerdos_maestros['objetivos']}\n"
-        "Si él te da una instrucción nueva o te corrige, di 'Acuerdo actualizado' y asimílalo."
+        f"Actúa como un Socio Estratégico y Analista Crítico de MC Losibe. "
+        "Tu objetivo es RACIONALIZAR cada respuesta. No des respuestas simples.\n\n"
+        "Sigue siempre esta estructura mental:\n"
+        "1. OBSERVACIÓN: Qué es lo que el usuario está pidiendo o planteando realmente.\n"
+        "2. ANÁLISIS: Cuáles son los riesgos, beneficios o implicancias (en trading, música o psicología).\n"
+        "3. CONCLUSIÓN/ACUERDO: Qué sugieres hacer y por qué.\n\n"
+        f"Usuario dice: {mensaje_usuario}\n"
+        "Responde de forma fluida pero estructurada."
     )
 
-# --- 3. DIÁLOGO Y RESULTADOS ---
-async def manejar_dialogo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# --- MANEJO DE DIÁLOGO ---
+async def chat_racional(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
-    mensaje = update.message.text
+    texto = update.message.text
 
-    # Detectar si el usuario quiere establecer un nuevo acuerdo
-    if "acuerdo" in mensaje.lower() or "desde ahora" in mensaje.lower():
-        prompt_aprender = f"El usuario quiere establecer un nuevo acuerdo: {mensaje}. Resume este acuerdo en una frase corta."
-        res_acuerdo = model.generate_content(prompt_aprender)
-        # Actualizamos la memoria (Aquí podrías dividir por categorías)
-        acuerdos_maestros["trading"] += f" | {res_acuerdo.text}"
-        await update.message.reply_text(f"🤝 **Acuerdo Sellado:** {res_acuerdo.text}\nLo tendré en cuenta para todos nuestros resultados futuros.")
-        return
-
-    # Iniciar charla con memoria de sesión
+    # Memoria de Sesión para Diálogo Fluido
     if uid not in chat_sessions:
         chat_sessions[uid] = model.start_chat(history=[])
 
     try:
-        # Enviamos el contexto maestro + el diálogo
-        contexto_vivo = f"[SISTEMA: {construir_instruccion_maestra()}]\n\nUsuario: {mensaje}"
-        respuesta = chat_sessions[uid].send_message(contexto_vivo)
-        await update.message.reply_text(respuesta.text, parse_mode='Markdown')
-    except:
-        await update.message.reply_text("🤯 Mi procesador se saturó con tanta info. ¿Podemos retomar el punto anterior?")
+        # Pedimos a Gemini que racionalice antes de responder
+        response = chat_sessions[uid].send_message(prompt_racional(texto))
+        
+        # Enviar la respuesta racionalizada
+        await update.message.reply_text(response.text, parse_mode='Markdown')
+        
+    except Exception as e:
+        logging.error(f"Error en racionalización: {e}")
+        await update.message.reply_text("🤯 Mi proceso de razonamiento se bloqueó. Intentemos simplificar la idea.")
 
-# --- 4. ACCIÓN: SNIPER BASADO EN ACUERDOS ---
-async def sniper_ia(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("🎯 Escaneando el mercado bajo nuestros acuerdos actuales...")
-    # (Aquí iría la lógica de DexScreener que ya tenemos, pero filtrada por 'acuerdos_maestros')
-    # ...
-    await update.message.reply_text("He filtrado los resultados. Según lo que acordamos, solo este token es viable...")
+# --- COMANDOS DE ACCIÓN ---
+async def sniper(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("🎯 Analizando el mercado con lógica de riesgo/beneficio...")
+    # Aquí llamaríamos a la función de análisis técnico que racionalice la entrada
 
-# --- 5. LANZAMIENTO ---
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("🧠 **Socio Racional Activado.**\nEstoy listo para debatir ideas, analizar trades y llegar a acuerdos lógicos contigo.")
+
+# --- ARRANQUE ---
 if __name__ == "__main__":
     Thread(target=lambda: app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000))), daemon=True).start()
-    
+
     token = os.getenv("TELEGRAM_TOKEN")
     if token:
-        bot_app = ApplicationBuilder().token(token).build()
-        bot_app.add_handler(CommandHandler("sniper", sniper_ia))
-        bot_app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), manejar_dialogo))
+        app_tg = ApplicationBuilder().token(token).build()
         
-        print("🚀 Socio inteligente en línea...")
-        bot_app.run_polling(drop_pending_updates=True)
+        app_tg.add_handler(CommandHandler("start", start))
+        app_tg.add_handler(CommandHandler("sniper", sniper))
+        app_tg.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), chat_racional))
+        
+        app_tg.run_polling(drop_pending_updates=True)
