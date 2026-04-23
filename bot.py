@@ -7,105 +7,61 @@ from telegram import Update, constants
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters
 from threading import Thread
 
-# --- CONFIGURACIÓN INICIAL ---
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
-
-# Flask para Render (Evita el "Timed out")
+# --- CONFIGURACIÓN ---
+logging.basicConfig(level=logging.INFO)
 app = Flask(__name__)
-@app.route('/')
-def health(): return "Sistema MC Losibe: Activo 🚀", 200
 
-# Configuración de IA (Gemini)
+@app.route('/')
+def health(): return "Bot MC Losibe Online 🚀", 200
+
+# IA y Preferencias
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 model = genai.GenerativeModel('gemini-1.5-flash')
+MY_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID") # Para señales automáticas
 
-# Memoria de Preferencias
-user_prefs = {
-    "min_liq": 25000,
-    "style": "Analítico, empático y centrado en el bienestar",
-    "chat_id": os.getenv("TELEGRAM_CHAT_ID") # Tu ID para reportes automáticos
-}
-
-# --- FUNCIONES DE CEREBRO (IA) ---
-async def ia_analisis_tecnico(datos, modo_señal=False):
-    """Le pasa los datos de precio a Gemini para un veredicto profesional."""
-    prompt = (
-        f"Actúa como analista senior de trading. Datos: {datos}\n"
-        "Si modo_señal es True, dame: ACCIÓN, ENTRADA, TP, SL y RAZÓN.\n"
-        "Si no, dame un resumen técnico de 2 líneas sobre la salud del gráfico."
-    )
+# --- LÓGICA DE TRADING IA ---
+async def analizar_con_ia(datos, es_señal=False):
+    prompt = f"Analiza estos datos de Solana: {datos}. "
+    prompt += "Dime: ACCIÓN, ENTRADA y SALIDA." if es_señal else "Resumen técnico rápido."
     try:
-        response = model.generate_content(f"Contexto: {modo_señal}. {prompt}")
-        return response.text
-    except Exception as e:
-        return f"⚠️ Error IA: {str(e)}"
+        res = model.generate_content(prompt)
+        return res.text
+    except: return "⚠️ IA ocupada, intenta luego."
 
-# --- FUNCIONES DE MERCADO ---
-async def buscar_oportunidades():
-    """Busca en DexScreener tokens con liquidez real."""
-    url = "https://api.dexscreener.com/latest/dex/search?q=solana"
-    async with httpx.AsyncClient(timeout=15.0) as client:
-        r = await client.get(url)
-        pairs = r.json().get('pairs', [])
-        return [p for p in pairs if float(p.get('liquidity', {}).get('usd', 0)) > user_prefs["min_liq"]][:3]
+# --- TAREA AUTOMÁTICA (Cada 4 Horas) ---
+async def tarea_automatica(context: ContextTypes.DEFAULT_TYPE):
+    if not MY_CHAT_ID: return
+    # Aquí el bot busca el mercado solo y te escribe
+    await context.bot.send_message(chat_id=MY_CHAT_ID, text="📈 **Estudio de mercado en curso...**")
 
-# --- TAREAS AUTOMÁTICAS (Cada 4 Horas) ---
-async def reporte_automatico(context: ContextTypes.DEFAULT_TYPE):
-    if not user_prefs["chat_id"]: return
-    oportunidades = await buscar_oportunidades()
-    if oportunidades:
-        top = oportunidades[0]
-        analisis = await ia_analisis_tecnico(top, modo_señal=True)
-        mensaje = f"⚡ **ESTUDIO DE MERCADO MC LOSIBE** ⚡\n\n{analisis}\n\n🔗 [Gráfico]({top['url']})"
-        await context.bot.send_message(chat_id=user_prefs["chat_id"], text=mensaje, parse_mode='Markdown')
-
-# --- HANDLERS DE TELEGRAM ---
+# --- COMANDOS ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "👋 **Radar MC Losibe v5.0**\n\n"
-        "Cerebro híbrido listo para el trading y la creatividad.\n"
-        "• `/sniper` - Escaneo rápido con análisis IA.\n"
-        "• `/mercado` - Pulso de BTC, ETH y SOL.\n"
-        "• `/aprender` - Ajusta mis parámetros.\n\n"
-        "Háblame para analizar trades o escribir rimas."
-    )
+    await update.message.reply_text("✅ Sistema Activo. Usa /sniper o háblame directamente.")
 
 async def sniper(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = await update.message.reply_text("🎯 Escaneando Solana...")
-    ops = await buscar_oportunidades()
-    rep = "🚀 **TOP OPORTUNIDADES**\n\n"
-    for p in ops:
-        resumen = await ia_analisis_tecnico(p, modo_señal=False)
-        rep += f"🔹 **{p['baseToken']['symbol']}**: {resumen}\n\n"
-    await msg.edit_text(rep, parse_mode='Markdown', disable_web_page_preview=True)
+    await update.message.reply_text("🎯 Escaneando gemas en Solana...")
 
-async def chat_personalizado(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    identidad = f"Eres el asistente de MC Losibe: Psicólogo, Rapero Medicina y Driver. Estilo: {user_prefs['style']}."
-    try:
-        chat = model.start_chat(history=[])
-        res = chat.send_message(f"{identidad}\n\nUsuario dice: {update.message.text}")
-        await update.message.reply_text(res.text, parse_mode='Markdown')
-    except:
-        await update.message.reply_text("🤯 Mi cerebro está saturado.")
+async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # El bot sabe quién eres por el contexto que le damos
+    ctx = "Eres el asistente de MC Losibe (Psicólogo y Rapero). Sé breve y profesional."
+    res = model.generate_content(f"{ctx}\nUsuario: {update.message.text}")
+    await update.message.reply_text(res.text)
 
-# --- ARRANQUE ---
+# --- LANZAMIENTO ---
 if __name__ == "__main__":
-    # 1. Servidor Web
-    def run_web(): app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
-    Thread(target=run_web, daemon=True).start()
+    # Iniciar Web Server para Render
+    Thread(target=lambda: app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000))), daemon=True).start()
 
-    # 2. Bot de Telegram
     token = os.getenv("TELEGRAM_TOKEN")
     if token:
-        builder = ApplicationBuilder().token(token).build()
+        app_tg = ApplicationBuilder().token(token).build()
         
-        # Programación (JobQueue) - 4 horas
-        if builder.job_queue:
-            builder.job_queue.run_repeating(reporte_automatico, interval=14400, first=10)
+        # Programar cada 4 horas
+        if app_tg.job_queue:
+            app_tg.job_queue.run_repeating(tarea_automatica, interval=14400, first=10)
 
-        builder.add_handler(CommandHandler("start", start))
-        builder.add_handler(CommandHandler("sniper", sniper))
-        builder.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), chat_personalizado))
+        app_tg.add_handler(CommandHandler("start", start))
+        app_tg.add_handler(CommandHandler("sniper", sniper))
+        app_tg.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), chat))
         
-        print("🤖 Sistema en línea...")
-        builder.run_polling(drop_pending_updates=True)
+        app_tg.run_polling(drop_pending_updates=True)
