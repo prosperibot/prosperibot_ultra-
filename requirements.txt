@@ -1,5 +1,7 @@
+numpy
+pandas
+httpx
 python-telegram-bot
 apscheduler
-httpx
 google-generativeai
 flask
